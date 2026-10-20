@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
+<defs>
+<filter id="slate" x="0" y="0" width="100%" height="100%">
+<feTurbulence type="fractalNoise" baseFrequency=".035 .12" numOctaves="5" seed="18" result="rock"/>
+<feDiffuseLighting in="rock" lighting-color="#a9a59b" surfaceScale="2.4" diffuseConstant="1" result="lit"><feDistantLight azimuth="235" elevation="44"/></feDiffuseLighting>
+<feBlend in="SourceGraphic" in2="lit" mode="multiply"/>
+</filter>
+<filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".5" numOctaves="3" seed="7"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".2"/></feComponentTransfer></filter>
+<linearGradient id="shade" x2=".8" y2="1"><stop stop-color="#4c4b46"/><stop offset=".55" stop-color="#343633"/><stop offset="1" stop-color="#272a28"/></linearGradient>
+</defs>
+<rect width="800" height="800" fill="url(#shade)" filter="url(#slate)"/>
+<rect width="800" height="800" filter="url(#grain)" opacity=".36" style="mix-blend-mode:soft-light"/>
+<g fill="none" stroke="#969286" opacity=".1"><path d="M0 72 148 68 195 77 373 70 495 77 680 65 800 72M0 602 127 589 274 594 390 579 561 584 714 571 800 576M13 779 167 767 280 773 417 759 586 764 799 750"/><path d="M0 217 79 211 136 215 244 207M577 273 639 266 800 273M0 410 173 399 222 405M671 441 733 432 800 436" stroke-width="2"/></g>
+<path d="M7 30 12 8 130 10 181 6 271 10 332 5 459 9 557 5 670 8 760 5 789 15 793 127M14 787 47 792 151 787 244 792 355 786 476 792 575 786 684 791 776 784 790 765" fill="none" stroke="#77766b" stroke-width="7" opacity=".5"/>
+</svg>

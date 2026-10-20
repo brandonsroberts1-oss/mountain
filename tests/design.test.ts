@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import opentype from 'opentype.js';
-import { coordinates, defaultDesign, exportSVG, textPath } from '../src/design';
-import { mountains, searchLibrary } from '../src/mountains';
-import { elevationToRidge, profileCoordinates } from '../src/terrain';
+import { coordinates, defaultDesign, exportSVG, textPath } from '../app/src/design';
+import { mountains, searchLibrary } from '../app/src/mountains';
+import { elevationToRidge, profileCoordinates } from '../app/src/terrain';
 const fontBuffer = readFileSync('node_modules/@fontsource/cinzel/files/cinzel-latin-600-normal.woff');
 const font = opentype.parse(fontBuffer.buffer.slice(fontBuffer.byteOffset, fontBuffer.byteOffset + fontBuffer.byteLength) as ArrayBuffer);
 

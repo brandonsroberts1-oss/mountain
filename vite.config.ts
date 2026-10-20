@@ -1,2 +1,6 @@
 import { defineConfig } from 'vite';
-export default defineConfig({ base: './', build: { target: 'es2022' } });
+export default defineConfig({
+  root: 'app',
+  base: './',
+  build: { outDir: '../dist', emptyOutDir: true, target: 'es2022' },
+});

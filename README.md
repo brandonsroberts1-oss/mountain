@@ -15,12 +15,29 @@ npm run dev
 
 ## Publish on GitHub Pages
 
-1. Push these files to the `main` branch of `brandonsroberts1-oss/mountain`.
-2. In the repository, open **Settings → Pages** and select **GitHub Actions** as the build and deployment source.
-3. The **Deploy studio to GitHub Pages** workflow runs on pushes to `main`. You can also run it from the Actions tab.
-4. Open the site URL reported by the deployment.
+The repository includes a compiled site at its root. GitHub Pages can serve it directly without running Node.js or a build command.
 
-The app uses relative asset URLs, so the same build works on a repository Pages path such as `/mountain/` or a custom domain. There are no client-side routes or server rewrites to configure. The workflow does not require any repository secrets.
+**Publish from a branch:** Open **Settings → Pages**, select **Deploy from a branch**, choose **main** and **/ (root)**, then save. GitHub publishes the committed `index.html` and `assets/`. An empty `.nojekyll` file disables Jekyll processing.
+
+**Publish with Actions:** Alternatively, select **GitHub Actions** as the Pages source. The **Build and deploy studio** workflow builds the source and deploys `dist/` on pushes to `main` or a manual workflow run. It detects branch publishing and leaves deployment to GitHub's built-in branch workflow in that mode. No repository secrets are needed.
+
+The app uses relative asset URLs, so both a repository Pages path such as `/mountain/` and a custom domain work. There are no client-side routes or server rewrites to configure.
+
+### Updating the site
+
+Edit application source under `app/`. The root `index.html`, `assets/`, font licenses, favicon, and slate texture are generated publication files; do not edit those copies directly.
+
+```sh
+npm run build:pages
+npm test
+npm run test:e2e
+```
+
+Commit the source changes **and** the regenerated root publication files, then push to `main`. This keeps both publishing modes up to date. `npm run dev` uses the source in `app/`; `npm run build` produces `dist/` without modifying the committed publication files.
+
+### If a published page is blank
+
+The published page must load a compiled `.js` file under `./assets/`, not `/src/main.ts`. Serving Vite's development HTML directly cannot run the app. The checked-in root page is the compiled version. Confirm the latest Pages deployment completed, then hard-refresh the browser to discard an older cached page.
 
 ## Design and engraving
 
@@ -48,16 +65,16 @@ The illustrated workflow and SVG export work without third-party requests once t
 
 Search terms go to Photon. Selected sample coordinates go to Open-Meteo. The app makes no analytics requests. Terrain responses are cached in memory for the current page session. API failures leave the existing design available and do not substitute a fictional profile.
 
-Fonts: Cinzel, Cormorant Garamond, DM Sans (SIL Open Font License; bundled license files in `public/fonts/`). Icons: Lucide, ISC license (`public/lucide-LICENSE`).
+Fonts: Cinzel, Cormorant Garamond, DM Sans (SIL Open Font License; bundled license files in `app/public/fonts/`). Icons: Lucide, ISC license (`app/public/lucide-LICENSE`).
 
 ## Validation
 
 ```sh
 npm test          # SVG, coordinates, search, terrain geometry
-npm run build    # TypeScript and static production build
+npm run build:pages # TypeScript, production build, and root Pages files
 npm run test:e2e # Chromium: actual production app, exports, controls, mobile, persistence
 ```
 
-The browser tests use `/usr/bin/chromium` by default, with an override through `CHROMIUM_PATH`. If Chromium is not installed, install Playwright's browser (`npx playwright install chromium`) and set `CHROMIUM_PATH` to its executable, or point to an installed Chrome/Chromium. E2E tests automatically start the production preview on port 4173; run the build first.
+The browser tests use `/usr/bin/chromium` when available, with an override through `CHROMIUM_PATH`. Otherwise, install Playwright's browser (`npx playwright install chromium`); the tests use it automatically. CI installs the browser and runs the same tests, including direct static hosting at both `/` and `/mountain/`. E2E tests automatically start the production preview on port 4173; run `npm run build:pages` first.
 
 Worldwide success and failure flows are tested against controlled API responses. Live third-party access may be restricted in cloud development environments; that does not affect the local illustrated collection or static GitHub Pages deployment.

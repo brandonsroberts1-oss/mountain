@@ -1,4 +1,4 @@
-name: Deploy studio to GitHub Pages
+name: Build and deploy studio
 on:
   push:
     branches: [main]
@@ -10,12 +10,14 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: ridgeline-pages
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      deploy-with-actions: ${{ steps.pages.outputs.deploy }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,12 +27,38 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - name: Install test browser
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Check Pages publishing mode
+        id: pages
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const { data } = await github.rest.repos.getPages({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+              const useActions = data.build_type === 'workflow';
+              core.setOutput('deploy', String(useActions));
+              if (!useActions) {
+                core.notice('Pages uses a branch. The committed index.html and assets are published by GitHub automatically.');
+              }
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              core.setOutput('deploy', 'false');
+              core.notice('Enable GitHub Pages in Settings → Pages, using GitHub Actions or main / (root).');
+            }
       - uses: actions/configure-pages@v5
+        if: steps.pages.outputs.deploy == 'true'
       - uses: actions/upload-pages-artifact@v3
+        if: steps.pages.outputs.deploy == 'true'
         with:
           path: dist
   deploy:
     needs: build
+    if: needs.build.outputs.deploy-with-actions == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
