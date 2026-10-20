@@ -1,6 +1,6 @@
 export type Mountain = {
   id: string; name: string; region: string; country: string; lat: number; lon: number;
-  elevation: number; aliases: string[]; ridge: string; cuts: string; source: 'illustrated' | 'terrain';
+  elevation: number; elevationSource?: 'map' | 'dem' | 'illustrated'; locationSource?: 'osm' | 'coordinates'; aliases: string[]; ridge: string; cuts: string; source: 'illustrated' | 'terrain';
 };
 
 // Original, artist-interpreted vector profiles. These are not surveyed outlines.

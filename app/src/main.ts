@@ -11,7 +11,7 @@ import cormorantURL from '@fontsource/cormorant-garamond/files/cormorant-garamon
 import sansURL from '@fontsource/dm-sans/files/dm-sans-latin-500-normal.woff?url';
 import { mountains, mountainPath, searchLibrary, type Mountain } from './mountains';
 import { coordinates, defaultDesign, designMarkup, escapeXML, exportSVG, type Design } from './design';
-import { loadTerrain, searchWorldwide, type PeakResult } from './terrain';
+import { aboveMinimum, feet, loadTerrain, peakAtCoordinates, searchWorldwide, validLocation, type PeakResult } from './terrain';
 
 const iconSet = { Mountain: MountainIcon, ArrowDownToLine, ArrowUpRight, Search, SlidersHorizontal, ChevronDown, ArrowRight, Check, RotateCcw, X, Globe2, MapPin, Info, Minus, Plus, Ruler, Leaf, Sparkles, CircleHelp, LoaderCircle };
 const icons = () => createIcons({ icons: iconSet, attrs: { 'stroke-width': 1.6 } });
@@ -31,7 +31,7 @@ function restore() {
     const saved = JSON.parse(localStorage.getItem('ridgeline-v1') || 'null');
     if (!saved || typeof saved.design?.name !== 'string') return;
     const match = mountains.find(m => m.id === saved.mountainId);
-    if (!match && saved.customMountain?.source !== 'terrain') return;
+    if (!match && (saved.customMountain?.source !== 'terrain' || !aboveMinimum(saved.customMountain.elevation) || !validLocation(saved.customMountain.lat, saved.customMountain.lon))) return;
     selected = match ?? saved.customMountain;
     const d = saved.design;
     design = { ...defaultDesign, name: d.name.slice(0, 48), coordinates: d.coordinates !== false, coordinateFormat: d.coordinateFormat === 'dms' ? 'dms' : 'decimal', font: ['cinzel', 'cormorant', 'sans'].includes(d.font) ? d.font : 'cinzel', artworkScale: Math.min(110, Math.max(65, Number(d.artworkScale) || 100)), nameSize: Math.min(75, Math.max(30, Number(d.nameSize) || 60)), border: d.border === true, divider: d.divider !== false, sizeInches: [3.5, 4, 4.25].includes(d.sizeInches) ? d.sizeInches : 4 };
@@ -51,16 +51,19 @@ $('#app').innerHTML = `
     <div class="studio">
       <aside class="mountain-panel panel" aria-label="Mountain selection">
         <div class="panel-heading"><span class="step-number">01</span><h2>Find your mountain</h2></div>
-        <label class="search-box"><i data-lucide="search"></i><input id="mountain-search" type="search" placeholder="Search mountains…" autocomplete="off" aria-label="Search mountains"/><kbd>/</kbd></label>
-        <div class="library-label"><span id="results-heading">THE MOUNTAIN COLLECTION</span><span id="result-count">12</span></div>
-        <div id="mountain-list" class="mountain-list" aria-label="Illustrated mountain results"></div>
-        <div class="worldwide-section"><button id="worldwide-search" class="worldwide-button"><i data-lucide="globe-2"></i><span>Find another peak worldwide</span><i data-lucide="arrow-up-right"></i></button><p>Real terrain profiles, from open elevation data.</p><div id="worldwide-results" aria-live="polite"></div></div>
+        <div class="search-scope"><i data-lucide="globe-2"></i> WORLDWIDE <span>ABOVE 3,500 FT</span></div>
+        <form id="peak-search-form" role="search"><label class="search-box"><i data-lucide="search"></i><input id="mountain-search" type="search" placeholder="Mountain name, anywhere…" autocomplete="off" aria-label="Search mountains"/><kbd>/</kbd></label><button id="worldwide-search" class="global-search-button" type="submit"><i data-lucide="globe-2"></i> Search worldwide <i data-lucide="arrow-right"></i></button></form>
+        <p class="search-hint">Add a region or country to narrow your search.</p>
+        <div class="library-label"><span id="results-heading">FIND YOUR NEXT SUMMIT</span><span id="result-count"></span></div>
+        <div id="worldwide-results" class="global-results" aria-live="polite"><div class="search-intro"><i data-lucide="mountain"></i><p>A world of mountains.</p><span>Search mapped summits on every continent, above 3,500 feet.</span></div></div>
+        <details class="coordinate-lookup"><summary>Can’t find it? Use summit coordinates <i data-lucide="plus"></i></summary><form id="coordinate-form"><p>Use an exact summit location. We’ll check its height and create a terrain profile.</p><label for="summit-name">Summit name</label><input id="summit-name" class="text-input" maxlength="48" placeholder="Your mountain" required/><div class="coordinate-fields"><div><label for="summit-latitude">Latitude</label><input id="summit-latitude" class="text-input" type="number" min="-90" max="90" step="any" placeholder="46.8523" required/></div><div><label for="summit-longitude">Longitude</label><input id="summit-longitude" class="text-input" type="number" min="-180" max="180" step="any" placeholder="-121.7603" required/></div></div><button class="secondary-button" id="coordinate-submit" type="submit">Use this summit</button><p id="coordinate-status" role="status"></p></form></details>
+        <details class="illustration-library"><summary>Featured illustrations <span>OFFLINE</span><i data-lucide="chevron-down"></i></summary><div id="mountain-list" class="mountain-list" aria-label="Illustrated mountain results"></div></details>
         <div class="collection-note"><i data-lucide="leaf"></i><p>Big places. Small keepsakes.<br><span>Designed for the memories you bring home.</span></p></div>
       </aside>
       <section class="preview-panel" aria-label="Live coaster preview">
         <div class="preview-toolbar"><span class="live-label"><span class="status-dot"></span> LIVE PREVIEW</span><div class="segmented" aria-label="Preview style"><button id="slate-view" class="active" aria-pressed="true">Slate</button><button id="artwork-view" aria-pressed="false">Artwork</button></div></div>
         <div class="preview-stage" id="preview-stage"><div class="coaster-wrap"><div id="coaster" class="coaster"><svg id="design-preview" role="img" aria-label="Loading coaster design" viewBox="0 0 1000 1000"><text x="500" y="500" text-anchor="middle" fill="#d9cbb0" font-size="28">Preparing your studio…</text></svg></div><div class="size-line"><span></span><i></i><p id="dimension-label">4.00 in / 101.6 mm</p><i></i><span></span></div></div></div>
-        <div class="preview-caption"><div><span class="tiny-mountain"><i data-lucide="mountain"></i></span><div><h3 id="selected-title"></h3><p id="selected-location"></p></div></div><span class="material-tag" id="material-tag">NATURAL SLATE</span></div>
+        <div class="preview-caption"><div><span class="tiny-mountain"><i data-lucide="mountain"></i></span><div><h3 id="selected-title"></h3><p id="selected-location"></p><p id="selected-elevation" class="selected-elevation"></p></div></div><span class="material-tag" id="material-tag">NATURAL SLATE</span></div>
         <div class="preview-bottom"><span><i data-lucide="ruler"></i> Built to scale. Made to keep.</span><button class="text-button" id="preview-info"><i data-lucide="info"></i> About this preview</button></div>
       </section>
       <aside class="customize-panel panel" aria-label="Design settings">
@@ -85,11 +88,9 @@ $('#app').innerHTML = `
 function thumbnail(m: Mountain) { return `<svg viewBox="0 0 600 250" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${mountainPath(m)}"/></svg>`; }
 
 function renderList() {
-  const query = $('#mountain-search') as HTMLInputElement;
-  const found = searchLibrary(query.value);
-  $('#result-count').textContent = String(found.length);
-  $('#results-heading').textContent = query.value.trim() ? 'MATCHING ILLUSTRATIONS' : 'THE MOUNTAIN COLLECTION';
-  $('#mountain-list').innerHTML = found.length ? found.map(m => `<button class="mountain-option ${m.id === selected.id ? 'selected' : ''}" data-mountain="${m.id}" aria-pressed="${m.id === selected.id}"><span class="mountain-thumbnail">${thumbnail(m)}</span><span class="mountain-option-text"><strong>${escapeXML(m.name)}</strong><small>${escapeXML(m.region)} <span>·</span> ${m.elevation.toLocaleString()} m</small></span>${m.id === selected.id ? '<span class="selection-check"><i data-lucide="check"></i></span>' : ''}</button>`).join('') : '<div class="empty-state"><i data-lucide="mountain"></i><p>No illustration just yet.</p><span>Try worldwide search below for a real terrain profile.</span></div>';
+  const query = $<HTMLInputElement>('#mountain-search').value.trim();
+  const found = searchLibrary(query).filter(m => aboveMinimum(m.elevation));
+  $('#mountain-list').innerHTML = found.length ? found.map(m => `<button class="mountain-option ${m.id === selected.id ? 'selected' : ''}" data-mountain="${m.id}" aria-pressed="${m.id === selected.id}"><span class="mountain-thumbnail">${thumbnail(m)}</span><span class="mountain-option-text"><strong>${escapeXML(m.name)}</strong><small>${escapeXML(m.region)} <span>·</span> ${feet(m.elevation)} ft</small></span>${m.id === selected.id ? '<span class="selection-check"><i data-lucide="check"></i></span>' : ''}</button>`).join('') : '<p class="featured-empty">No saved illustration for this name. Search worldwide above to generate its terrain profile.</p>';
   icons();
 }
 
@@ -110,10 +111,11 @@ function renderDesign() {
   $('#material-tag').textContent = mode === 'slate' ? 'NATURAL SLATE' : 'VECTOR ARTWORK';
   $('#name-size-value').textContent = String(design.nameSize);
   $('#artwork-size-value').textContent = `${design.artworkScale}%`;
-  $('#coordinate-details').textContent = selected.source === 'terrain' ? 'Peak location from OpenStreetMap' : 'Summit location · WGS 84';
+  $('#coordinate-details').textContent = selected.locationSource === 'coordinates' ? 'Your summit coordinates · WGS 84' : selected.source === 'terrain' ? 'Peak location from OpenStreetMap' : 'Summit location · WGS 84';
   $('#coordinate-format').toggleAttribute('disabled', !design.coordinates);
   $('#show-divider').toggleAttribute('disabled', !design.coordinates);
   $('#selected-title').textContent = selected.name;
+  $('#selected-elevation').textContent = `${selected.elevationSource === 'dem' ? '≈ ' : ''}${feet(selected.elevation)} ft · ${Math.round(selected.elevation).toLocaleString()} m above sea level`;
   $('#selected-location').textContent = `${selected.region}${selected.region && selected.country ? ', ' : ''}${selected.country} · ${selected.source === 'illustrated' ? 'Illustrated profile' : 'Elevation cross-section'}`;
   $('#terrain-controls').toggleAttribute('hidden', selected.source !== 'terrain');
   const missing = [...new Set([...design.name].filter(char => char.trim() && fonts[design.font].charToGlyphIndex(char) === 0))];
@@ -152,10 +154,14 @@ $('#mountain-list').addEventListener('click', e => {
 });
 $('#mountain-search').addEventListener('input', () => {
   lookupController?.abort();
-  $('#worldwide-results').innerHTML = '';
+  worldwideResults = [];
+  $<HTMLButtonElement>('#worldwide-search').disabled = false;
+  $('#result-count').textContent = '';
+  $('#results-heading').textContent = 'WORLDWIDE MOUNTAIN SEARCH';
+  $('#worldwide-results').innerHTML = '<p class="lookup-status">Press Search worldwide or Enter to find peaks above 3,500 ft.</p>';
   renderList();
 });
-$('#mountain-search').addEventListener('keydown', e => { if ((e as KeyboardEvent).key === 'Enter') doWorldwideSearch(); });
+$('#peak-search-form').addEventListener('submit', e => { e.preventDefault(); void doWorldwideSearch(); });
 document.addEventListener('keydown', e => { if (e.key === '/' && !['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as Element).tagName) && !$<HTMLDialogElement>('#help-dialog').open) { e.preventDefault(); $<HTMLInputElement>('#mountain-search').focus(); } });
 
 const bind = (id: string, change: (input: HTMLInputElement) => void) => $(id).addEventListener('input', e => { change(e.target as HTMLInputElement); renderDesign(); });
@@ -189,35 +195,68 @@ $('#download-svg').addEventListener('click', () => {
 
 async function doWorldwideSearch() {
   const query = $<HTMLInputElement>('#mountain-search').value.trim();
-  if (query.length < 3) { toast('Type a mountain name (at least 3 characters) to search worldwide.'); $<HTMLInputElement>('#mountain-search').focus(); return; }
+  if (query.length < 3) { toast('Type at least 3 characters of a mountain name to search worldwide.'); $<HTMLInputElement>('#mountain-search').focus(); return; }
   lookupController?.abort(); const controller = new AbortController(); lookupController = controller;
-  $('#worldwide-results').innerHTML = '<p class="lookup-status"><i data-lucide="loader-circle" class="spin"></i> Looking for your peak…</p>'; icons();
+  $<HTMLButtonElement>('#worldwide-search').disabled = true;
+  worldwideResults = [];
+  $('#result-count').textContent = '';
+  $('#results-heading').textContent = 'SEARCHING WORLDWIDE';
+  $('#worldwide-results').innerHTML = '<p class="lookup-status"><i data-lucide="loader-circle" class="spin"></i> Finding summits and checking heights…</p>'; icons();
   try {
-    worldwideResults = await searchWorldwide(query, AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]));
+    const results = await searchWorldwide(query, AbortSignal.any([controller.signal, AbortSignal.timeout(45000)]));
     if (controller.signal.aborted) return;
-    $('#worldwide-results').innerHTML = worldwideResults.length ? `<p class="online-credit">OpenStreetMap peak locations</p>${worldwideResults.map((p, i) => `<button class="world-result" data-world-index="${i}"><i data-lucide="map-pin"></i><span><strong>${escapeXML(p.name)}</strong><small>${escapeXML([p.region, p.country].filter(Boolean).join(', '))}</small></span><i data-lucide="plus"></i></button>`).join('')}` : '<p class="lookup-status">No mapped peaks found. Try another name or a nearby region.</p>';
+    worldwideResults = results.peaks;
+    $('#results-heading').textContent = 'SUMMITS ABOVE 3,500 FT';
+    $('#result-count').textContent = String(worldwideResults.length);
+    const notes = [results.excludedCount ? `${results.excludedCount} lower summit${results.excludedCount === 1 ? '' : 's'} excluded.` : '', results.unverifiedCount ? `${results.unverifiedCount} without a verified height omitted.` : '', results.limitReached ? 'More matches may exist. Refine the name or add a region.' : ''].filter(Boolean).join(' ');
+    $('#worldwide-results').innerHTML = worldwideResults.length ? `<p class="online-credit">Global map results · heights in feet<br>≈ indicates an elevation estimate</p>${worldwideResults.map((p, i) => `<button class="world-result" data-world-index="${i}"><i data-lucide="mountain"></i><span><strong>${escapeXML(p.name)}</strong><small>${escapeXML([p.region, p.country].filter(Boolean).join(', ') || `${p.lat.toFixed(3)}°, ${p.lon.toFixed(3)}°`)}</small><span class="peak-height">${p.elevationSource === 'dem' ? '≈ ' : ''}${feet(p.elevation!)} ft <span>· ${Math.round(p.elevation!).toLocaleString()} m</span></span></span><i data-lucide="plus"></i></button>`).join('')}<p class="search-result-note">${escapeXML(notes)}</p>` : `<div class="search-intro"><i data-lucide="mountain"></i><p>No qualifying summit found.</p><span>${results.excludedCount ? 'These matches are at or below 3,500 ft. ' : results.unverifiedCount ? 'Summit heights could not be verified for these matches. ' : ''}Try another spelling or a region. You can also use exact summit coordinates below.</span></div>`;
   } catch (error) {
     if (controller.signal.aborted) return;
-    $('#worldwide-results').innerHTML = '<p class="lookup-error">The worldwide service is unavailable. Check your connection or try again later. The illustrated collection works offline.</p>';
+    $('#results-heading').textContent = 'SEARCH NEEDS ANOTHER TRY';
+    const message = error instanceof Error && error.name !== 'TimeoutError' && !(error instanceof TypeError) ? error.message : 'Worldwide search is temporarily unavailable. Please try again shortly.';
+    $('#worldwide-results').innerHTML = `<p class="lookup-error">${escapeXML(message)}</p>`;
+  } finally {
+    if (lookupController === controller) $<HTMLButtonElement>('#worldwide-search').disabled = false;
   }
   icons();
 }
-$('#worldwide-search').addEventListener('click', doWorldwideSearch);
+
+async function usePeak(peak: PeakResult, controller: AbortController) {
+  const mountain = await loadTerrain(peak, 20, 90, AbortSignal.any([controller.signal, AbortSignal.timeout(25000)]));
+  if (controller.signal.aborted) return;
+  selectMountain(mountain);
+  $<HTMLSelectElement>('#terrain-span').value = '20'; $<HTMLSelectElement>('#terrain-bearing').value = '90';
+  toast('Terrain profile loaded. Adjust the width and direction to explore the ridge.');
+}
+
 $('#worldwide-results').addEventListener('click', async e => {
   const button = (e.target as Element).closest<HTMLButtonElement>('[data-world-index]');
   if (!button) return;
   const peak = worldwideResults[Number(button.dataset.worldIndex)];
+  if (!peak) return;
   terrainController?.abort(); const controller = new AbortController(); terrainController = controller;
   button.disabled = true; const original = button.innerHTML; button.innerHTML = '<i data-lucide="loader-circle" class="spin"></i><span>Reading the landscape…</span>'; icons();
-  try {
-    const mountain = await loadTerrain(peak, 20, 90, AbortSignal.any([controller.signal, AbortSignal.timeout(25000)]));
-    if (controller.signal.aborted) return;
-    selectMountain(mountain);
-    $<HTMLSelectElement>('#terrain-span').value = '20'; $<HTMLSelectElement>('#terrain-bearing').value = '90';
-    toast('Terrain profile loaded. Adjust the span and direction to explore the ridge.');
-  } catch (error) { if (!controller.signal.aborted) toast(error instanceof TypeError ? 'Elevation service unavailable. Please try again later.' : (error as Error).message); }
+  try { await usePeak(peak, controller); }
+  catch (error) { if (!controller.signal.aborted) toast(error instanceof TypeError ? 'Elevation service unavailable. Please try again later.' : (error as Error).message); }
   finally { button.disabled = false; button.innerHTML = original; icons(); }
 });
+
+$('#coordinate-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const form = e.target as HTMLFormElement;
+  if (!form.reportValidity()) return;
+  terrainController?.abort(); const controller = new AbortController(); terrainController = controller;
+  const button = $<HTMLButtonElement>('#coordinate-submit');
+  button.disabled = true; $('#coordinate-status').textContent = 'Checking summit height and loading the terrain…';
+  try {
+    const peak = await peakAtCoordinates($<HTMLInputElement>('#summit-name').value, Number($<HTMLInputElement>('#summit-latitude').value), Number($<HTMLInputElement>('#summit-longitude').value), AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]));
+    if (controller.signal.aborted) return;
+    await usePeak(peak, controller);
+    $('#coordinate-status').textContent = `Summit verified: approximately ${feet(peak.elevation!)} ft.`;
+  } catch (error) { if (!controller.signal.aborted) $('#coordinate-status').textContent = error instanceof TypeError ? 'Elevation lookup is unavailable. Your previous design is preserved. Please try again.' : (error as Error).message; }
+  finally { button.disabled = false; }
+});
+
 $('#refresh-terrain').addEventListener('click', async () => {
   if (!activeTerrain) return;
   terrainController?.abort(); const controller = new AbortController(); terrainController = controller;
@@ -235,9 +274,9 @@ const dialog = $<HTMLDialogElement>('#help-dialog');
 function openDialog(content: string) { $('#dialog-content').innerHTML = content; dialog.showModal(); }
 $('.dialog-close').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', e => { if (e.target === dialog) { const r = dialog.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dialog.close(); } });
-$('#how-it-works').addEventListener('click', () => openDialog(`<p class="eyebrow">FROM PEAK TO KEEPSAKE</p><h2>Make a place your own.</h2><ol class="help-steps"><li><strong>Find your mountain.</strong><p>Choose one of 12 original illustrations, or search worldwide for a mapped summit and an elevation cross-section.</p></li><li><strong>Add your finishing touches.</strong><p>Pick a typeface, show the summit coordinates, and adjust the design on your slate preview. Your changes save on this device.</p></li><li><strong>Bring it into xTool Studio.</strong><p>Download the SVG, import it, and verify its size matches your coaster: 101.6 × 101.6 mm for a 4-inch square. Set the filled artwork to engrave, position the design, and frame your work before running.</p></li></ol><div class="dialog-note">Slate varies in texture and engraving contrast. Use your machine and slate supplier’s settings, and test a spare piece first. The preview is an illustration of the result.</div>`));
+$('#how-it-works').addEventListener('click', () => openDialog(`<p class="eyebrow">FROM PEAK TO KEEPSAKE</p><h2>Make a place your own.</h2><ol class="help-steps"><li><strong>Find your mountain.</strong><p>Search for a mountain anywhere in the world. Results are checked for heights above 3,500 ft (1,066.8 m). Add a region to distinguish matching names, or enter exact summit coordinates if the map search misses it. Select a result to generate its terrain cross-section. Featured illustrations are also available offline.</p></li><li><strong>Add your finishing touches.</strong><p>Pick a typeface, show the summit coordinates, and adjust the design on your slate preview. Your changes save on this device.</p></li><li><strong>Bring it into xTool Studio.</strong><p>Download the SVG, import it, and verify its size matches your coaster: 101.6 × 101.6 mm for a 4-inch square. Set the filled artwork to engrave, position the design, and frame your work before running.</p></li></ol><div class="dialog-note">Slate varies in texture and engraving contrast. Use your machine and slate supplier’s settings, and test a spare piece first. The preview is an illustration of the result.</div>`));
 $('#preview-info').addEventListener('click', () => openDialog(`<p class="eyebrow">A NOTE ON THE MATERIAL</p><h2>A naturally different finish.</h2><p>The slate view simulates a dark, rough-edged coaster with a warm, light engraving. Actual engraving color and detail depend on your slate, laser, focus, and settings.</p><p>Switch to <strong>Artwork</strong> to inspect the shapes. Your SVG contains only solid black engraving paths on a transparent background; the slate texture, dimensions, and shadows stay in the preview.</p><p>The design is sized to the coaster, with an inset margin. Check the imported millimetre dimensions and frame it on your actual blank before engraving.</p>`));
-$('#credits-button').addEventListener('click', () => openDialog(`<p class="eyebrow">THE DETAILS BEHIND THE DESIGN</p><h2>Inspired by the real thing.</h2><p>The 12 collection illustrations are original, artist-interpreted profiles. They capture the character of each peak, rather than a surveyed view from a specific viewpoint. Summit coordinates use WGS 84.</p><p>Worldwide lookup uses <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> peak locations via <a href="https://photon.komoot.io/" target="_blank" rel="noreferrer">Photon</a>. Terrain profiles use <a href="https://open-meteo.com/en/docs/elevation-api" target="_blank" rel="noreferrer">Open-Meteo</a> / Copernicus DEM GLO-90. These are measured cross-sections through the summit, not camera-view silhouettes. Heights are normalized to fit the design.</p><p>Worldwide services require internet access and are subject to availability and provider limits. Search terms and selected coordinates are sent to these providers. The illustrated library and export need no API key.</p><p>Fonts: Cinzel, Cormorant Garamond, and DM Sans, distributed under the SIL Open Font License. Fonts are bundled locally; exported lettering becomes vector paths.</p>`));
+$('#credits-button').addEventListener('click', () => openDialog(`<p class="eyebrow">THE DETAILS BEHIND THE DESIGN</p><h2>Inspired by the real thing.</h2><p>Worldwide search covers mapped peaks on every continent above 3,500 ft. Global map indexes are not exhaustive; exact summit coordinates provide a fallback for unlisted locations. Elevation estimates from a 90 m grid can differ from surveyed summit heights, particularly on narrow peaks. Featured collection illustrations are original, artist-interpreted profiles. They capture the character of each peak, rather than a surveyed view from a specific viewpoint. Summit coordinates use WGS 84.</p><p>Worldwide lookup uses <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> peak locations via <a href="https://photon.komoot.io/" target="_blank" rel="noreferrer">Photon</a>, with a direct <a href="https://overpass-api.de/" target="_blank" rel="noreferrer">Overpass</a> map search as a fallback. Terrain profiles use <a href="https://open-meteo.com/en/docs/elevation-api" target="_blank" rel="noreferrer">Open-Meteo</a> / Copernicus DEM GLO-90. These are measured cross-sections through the summit, not camera-view silhouettes. Heights are normalized to fit the design.</p><p>Worldwide services require internet access and are subject to availability and provider limits. Search terms and selected coordinates are sent to these providers. The illustrated library and export need no API key.</p><p>Fonts: Cinzel, Cormorant Garamond, and DM Sans, distributed under the SIL Open Font License. Fonts are bundled locally; exported lettering becomes vector paths.</p>`));
 
 syncControls(); renderList(); icons();
 async function initFonts() {

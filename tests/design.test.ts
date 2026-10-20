@@ -52,7 +52,7 @@ describe('mountain selection and measured terrain', () => {
     expect(points[80].lon).toBeGreaterThan(-121);
     const northSouth = profileCoordinates(46, -121, 20, 0);
     expect(northSouth[0].lat).toBeLessThan(46);
-    expect(northSouth[80].lon).toBe(-121);
+    expect(northSouth[80].lon).toBeCloseTo(-121, 10);
   });
   it('rejects incomplete, invalid, and flat elevation results', () => {
     expect(() => elevationToRidge([100, 200])).toThrow('incomplete');

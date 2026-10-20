@@ -42,6 +42,7 @@ for (const prefix of ['/', '/mountain/']) {
     await page.goto(address + prefix);
     await expect(page.getByRole('button', { name: 'Download SVG' })).toBeEnabled();
     await page.getByRole('searchbox').fill('hood');
+  await page.locator('.illustration-library summary').click();
     await page.getByRole('button', { name: /Mount Hood Oregon/ }).click();
     await expect(page.locator('#selected-title')).toHaveText('Mount Hood');
     const downloadEvent = page.waitForEvent('download');
